@@ -27,10 +27,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync icons and create release tag
+      - name: Sync icons and create release
         id: sync
         run: |
-          CDN_BRANCH="icons"
+          RELEASES_BRANCH="releases"
           SOURCE_FOLDER="icons"
 
           if [ ! -d "$SOURCE_FOLDER" ]; then
@@ -52,18 +52,17 @@ jobs:
             exit 0
           fi
 
-          # Store icons in temp location
+          # Store icons in temp location and create zip before switching branches
           mkdir -p /tmp/icons-sync
           cp -r $SOURCE_FOLDER/* /tmp/icons-sync/
+          cd /tmp/icons-sync && zip -r "/tmp/tabler-icons-${VERSION}.zip" . && cd -
 
-          MAIN_SHA=$(git rev-parse --short HEAD)
-
-          # Setup CDN branch
-          if git ls-remote --heads origin $CDN_BRANCH | grep -q $CDN_BRANCH; then
-            git checkout $CDN_BRANCH
+          # Setup releases branch
+          if git ls-remote --heads origin $RELEASES_BRANCH | grep -q $RELEASES_BRANCH; then
+            git checkout $RELEASES_BRANCH
             find . -maxdepth 1 ! -name '.git' ! -name '.' -exec rm -rf {} +
           else
-            git checkout --orphan $CDN_BRANCH
+            git checkout --orphan $RELEASES_BRANCH
             git rm -rf .
           fi
 
@@ -79,14 +78,28 @@ jobs:
           fi
 
           git commit -m "v${VERSION}"
-          git push -u origin $CDN_BRANCH --force-with-lease
+          git push -u origin $RELEASES_BRANCH --force-with-lease
 
-          # Create versioned tag
+          # Create versioned tag on releases branch
           git tag $VERSION_TAG
           git push origin $VERSION_TAG
 
           echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_tag=$VERSION_TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: steps.sync.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.sync.outputs.version }}"
+          VERSION_TAG="${{ steps.sync.outputs.version_tag }}"
+
+          gh release create "$VERSION_TAG" \
+            --title "Tabler Icons v${VERSION}" \
+            --notes "Synced from [tabler/tabler-icons](https://github.com/tabler/tabler-icons) v${VERSION}" \
+            "/tmp/tabler-icons-${VERSION}.zip#tabler-icons-${VERSION}.zip"
 
       - name: Output CDN URLs
         if: steps.sync.outputs.has_changes == 'true'

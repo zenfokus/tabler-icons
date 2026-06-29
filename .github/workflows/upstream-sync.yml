@@ -1,0 +1,41 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync from upstream tabler/tabler-icons
+        run: |
+          git remote add upstream https://github.com/tabler/tabler-icons.git
+          git fetch upstream
+
+          UPSTREAM_SHA=$(git rev-parse upstream/main)
+          LOCAL_SHA=$(git rev-parse HEAD)
+
+          if [ "$LOCAL_SHA" = "$UPSTREAM_SHA" ]; then
+            echo "Already up to date with upstream"
+            exit 0
+          fi
+
+          git merge upstream/main --no-edit
+          git push origin HEAD:main
+          echo "Synced $(git rev-list --count $LOCAL_SHA..upstream/main) new commit(s) from upstream"
