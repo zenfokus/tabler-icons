@@ -28,14 +28,13 @@ jobs:
           git remote add upstream https://github.com/tabler/tabler-icons.git
           git fetch upstream
 
-          UPSTREAM_SHA=$(git rev-parse upstream/main)
-          LOCAL_SHA=$(git rev-parse HEAD)
-
-          if [ "$LOCAL_SHA" = "$UPSTREAM_SHA" ]; then
+          # Check if upstream/main has commits not yet in HEAD
+          if git merge-base --is-ancestor upstream/main HEAD; then
             echo "Already up to date with upstream"
             exit 0
           fi
 
+          NEW_COMMITS=$(git rev-list --count HEAD..upstream/main)
           git merge upstream/main --no-edit
           git push origin HEAD:main
-          echo "Synced $(git rev-list --count $LOCAL_SHA..upstream/main) new commit(s) from upstream"
+          echo "Synced ${NEW_COMMITS} new commit(s) from upstream"
